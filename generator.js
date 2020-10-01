@@ -1,7 +1,10 @@
 class Cloner {
-    constructor() {
-        
+    constructor({animation, tryResponsive}) {
+        this.animation = animation;
+        this.tryResponsive = tryResponsive;
         this.attributes = [];
+        this.widthFactor = 0;
+        this.heightFactor = 0;
         
         this.cssName = function (jsName) {
             let word = '';
@@ -9,6 +12,19 @@ class Cloner {
         
             return word;
         };
+
+        this.convertToResponsive = function (value, factor, unit) {
+            if (!value || typeof(value) !== 'string') return value;
+            value = value.split(' ');
+            for (let i = 0; i < value.length; i++) {
+                if (value[i].includes('px')) {
+                    value[i] = parseFloat(value[i].replace('px', ''))/factor + unit; 
+                }
+                
+            }
+
+            return value.join(' ');
+        }
 
         this.buildUnit = function (element) {
             let reverted = document.createElement(element.tagName),
@@ -20,7 +36,14 @@ class Cloner {
             document.body.appendChild(reverted);
             
             for (const attr in reverted.style) {
-                if (needFill) this.attributes.push(attr);
+                if (
+                    needFill &&
+                    !(!this.animation && attr === 'animation') &&
+                    this.tryResponsive && (!attr.includes('height') || !attr.includes('width'))
+                    ) {
+                    this.attributes.push(attr);
+                }
+
                 style += `${this.cssName(attr)}:revert;`;
             }
 
@@ -30,7 +53,18 @@ class Cloner {
             
             for (const attr of this.attributes) {
                 if (!attr.includes('webkit') && attr != 'cssText' && defaultStyles[attr] !== customStyles[attr]) {
-                    stylesStr += `${this.cssName(attr)}:${customStyles[attr] || 'revert'};`;
+                    
+                    let val = customStyles[attr] || 'revert';
+
+                    if (this.tryResponsive && val.includes('px')) {
+                        if (val.includes('height')) {
+                            val = this.convertToResponsive(val, this.heightFactor, 'vh');
+                        } else  {
+                            val = this.convertToResponsive(val, this.widthFactor, 'vw');
+                        }  
+                    }
+
+                    stylesStr += `${this.cssName(attr)}:${val};`;
                 } 
             }
         
@@ -75,6 +109,23 @@ class Cloner {
             nodeCopy.setAttribute('style', this.buildUnit(objetive));
             return nodeCopy.outerHTML;
         }
+
+        this.generateElement = function (selector) {
+            let div = document.createElement('div'),
+            st;
+
+            div.style.height = '1vh';
+            div.style.width = '1vw';
+            
+            document.body.appendChild(div);
+            
+            st = window.getComputedStyle(div);
+            
+            this.widthFactor = parseFloat(st.width.replace('px', ''));
+            this.heightFactor = parseFloat(st.height.replace('px', ''));
+
+            return this.generate(selector);
+        }
     }
 }
 
@@ -82,5 +133,5 @@ class Cloner {
     Example
 */
 
-var cl = new Cloner();
-cl.generate('h1');
+var cl = new Cloner({tryResponsive: true, animation: false});
+cl.generateElement('h1');
